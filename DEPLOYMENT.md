@@ -108,3 +108,13 @@ Production contacts/unknown questions live in Postgres when `DATABASE_URL` is se
 transcripts are not stored by this app. Set privacy/retention policy and database access rules
 for the saved contact data. Back up your database and monitor free-tier usage/provider quotas.
 GitHub Actions public-repository standard runners are free; private repos use included quotas.
+
+
+## Database startup errors
+
+Use only the complete URL from Neon Connect as Render's `DATABASE_URL`, with no `psql`
+prefix, surrounding quotes, or `DATABASE_URL=` prefix. Keep its SSL query parameters.
+The app applies statement timeout inside transactions, not as a connection startup
+option, for compatibility with poolers. Startup errors report a safe category such as
+authentication, TLS, timeout, or permissions without printing server text/credentials.
+If deployment fails, share only that safe error message, not your connection string.

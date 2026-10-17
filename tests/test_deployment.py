@@ -3,9 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from digital_agent.storage import Store, PostgresStore, create_store
+from digital_agent.storage import Store, PostgresStore, create_store, database_error_hint
 from scripts.deploy_render import deployment_url
 
 class DeploymentTests(unittest.TestCase):
@@ -36,3 +36,35 @@ class DeploymentTests(unittest.TestCase):
             with self.assertRaises(RuntimeError) as caught: PostgresStore('private-url')
         self.assertNotIn('private-password', str(caught.exception))
         self.assertNotIn('private-url', str(caught.exception))
+
+
+class PostgresConnectionTests(unittest.TestCase):
+    def test_pooler_connection_uses_transaction_timeout_not_startup_options(self):
+        store = PostgresStore.__new__(PostgresStore)
+        store.url = 'postgresql://test:fake@localhost/test'
+        with patch('psycopg.connect') as connect:
+            connection = connect.return_value.__enter__.return_value
+            with store.connect() as db:
+                self.assertIs(db, connection)
+                db.execute('SELECT 1')
+            connect.assert_called_once_with(store.url, connect_timeout=30)
+            self.assertEqual(connection.execute.call_args_list[0].args, ("SET LOCAL statement_timeout = '10s'",))
+            connect.return_value.__exit__.assert_called_once()
+
+    def test_authentication_hint_does_not_leak_raw_message(self):
+        error = RuntimeError('password authentication failed for private-user secret-password')
+        hint = database_error_hint(error)
+        self.assertIn('Authentication failed', hint)
+        self.assertNotIn('private-user', hint)
+        self.assertNotIn('secret-password', hint)
+
+    def test_permission_hint_uses_sqlstate(self):
+        error = RuntimeError('private-details')
+        error.sqlstate = '42501'
+        self.assertIn('permissions', database_error_hint(error))
+
+    def test_shell_command_is_rejected_without_connecting(self):
+        with patch('psycopg.connect') as connect:
+            with self.assertRaisesRegex(RuntimeError, 'Invalid DATABASE_URL'):
+                PostgresStore("psql 'postgresql://user:secret@host/db'")
+            connect.assert_not_called()
