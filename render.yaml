@@ -1,0 +1,25 @@
+# This file belongs at the root of the standalone digital-twin repository.
+services:
+  - type: web
+    name: digital-twin
+    runtime: docker
+    plan: free
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    # GitHub Actions triggers a deploy only after tests and Docker smoke checks pass.
+    autoDeployTrigger: "off"
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 7860
+      - key: PORT_STRICT
+        value: "true"
+      - key: CHAT_CONCURRENCY
+        value: 2
+      - key: OPEN_ROUTER_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false

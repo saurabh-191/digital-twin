@@ -1,0 +1,79 @@
+name: Test and deploy production
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digital-twin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: agent_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U test -d agent_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      GRADIO_ANALYTICS_ENABLED: "False"
+      TEST_DATABASE_URL: postgresql://test:test@localhost:5432/agent_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Run tests (including Postgres)
+        run: python -m unittest discover -s tests -v
+      - name: Build deployment image
+        run: docker build -t digital-twin:ci .
+      - name: Smoke-test the container
+        shell: bash
+        run: |
+          docker run -d --name digital-twin-ci -p 127.0.0.1:7860:7860             -e OPEN_ROUTER_KEY=ci-placeholder digital-twin:ci
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:7860/healthz > /dev/null; then
+              curl --fail --silent http://127.0.0.1:7860/ > /dev/null
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs digital-twin-ci
+          exit 1
+      - name: Stop smoke-test container
+        if: always()
+        run: docker rm -f digital-twin-ci || true
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Deploy the tested commit to Render
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: python scripts/deploy_render.py

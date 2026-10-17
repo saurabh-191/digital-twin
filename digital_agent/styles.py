@@ -36,6 +36,13 @@ CSS = """
 #privacy-note { text-align: center; opacity: .65; font-size: 11px; padding: 4px 16px 12px; }
 #privacy-note p { line-height: 1.6; }
 #chat-shell .gallery, #chat-shell .dataset { border-radius: 16px; }
+#chat-error { align-items: center; border: 1px solid #dc7373; border-radius: 14px;
+  padding: 10px 14px; background: var(--input-background-fill); margin-bottom: 8px; }
+#chat-error-message { flex: 1; min-width: 0; }
+#chat-error-message p { margin: 0; font-size: 14px; }
+#dismiss-chat-error { flex: 0 0 96px; min-height: 44px; font-size: 14px;
+  background: transparent; border: none; cursor: pointer; }
+#dismiss-chat-error:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 @media (max-width: 640px) {
   #chat-shell { padding: 4px 4px 0; }
   #app-header { padding: 12px 4px 8px; }

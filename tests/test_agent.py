@@ -1,4 +1,6 @@
 import json
+import asyncio
+import gradio as gr
 import os
 import sqlite3
 import socket
@@ -11,7 +13,7 @@ from types import SimpleNamespace as NS
 from unittest.mock import Mock, patch
 
 from digital_agent.agent import ChatError, DigitalAgent
-from digital_agent.app import create_app, select_port
+from digital_agent.app import create_app, select_port, create_response_handler, clear_error
 from digital_agent.config import Settings
 from digital_agent.storage import Store
 from digital_agent.tools import ToolHandler
@@ -102,6 +104,35 @@ class AgentTests(unittest.TestCase):
     def test_auth_must_be_complete(self):
         with patch.dict(os.environ, {'APP_AUTH_USER': 'owner', 'APP_AUTH_PASSWORD': ''}, clear=True):
             with self.assertRaises(ValueError): Settings.from_env()
+
+    def test_error_can_be_dismissed_and_next_request_succeeds(self):
+        failing_agent = Mock()
+        failing_agent.chat.side_effect = [ChatError('Please try again shortly.'), 'Recovered reply']
+        handler = create_response_handler(failing_agent)
+        with gr.Blocks():
+            text = gr.Markdown()
+            banner = gr.Row(visible=False)
+            chat = gr.ChatInterface(handler, additional_outputs=[text, banner])
+        failed = asyncio.run(chat._submit_fn('hello', []))
+        self.assertEqual(failed[0], [])
+        self.assertEqual(failed[1], [{'role': 'user', 'content': 'hello'}])
+        self.assertEqual(failed[2], 'Please try again shortly.')
+        self.assertTrue(failed[3]['visible'])
+        cleared_text, cleared_banner = clear_error()
+        self.assertEqual(cleared_text, '')
+        self.assertFalse(cleared_banner['visible'])
+        recovered = asyncio.run(chat._submit_fn('try again', failed[1]))
+        self.assertEqual(recovered[0], 'Recovered reply')
+        self.assertEqual(recovered[2], '')
+        self.assertFalse(recovered[3]['visible'])
+
+    def test_unexpected_ui_error_is_safe(self):
+        agent = Mock()
+        agent.chat.side_effect = RuntimeError('private-provider-secret')
+        answer, message, banner = create_response_handler(agent)('hello', [])
+        self.assertEqual(answer, [])
+        self.assertNotIn('private-provider-secret', message)
+        self.assertTrue(banner['visible'])
 
     def test_ui_builds_without_external_calls(self):
         demo = create_app(agent=self.agent, settings=self.settings)

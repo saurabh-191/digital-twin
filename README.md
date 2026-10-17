@@ -1,8 +1,16 @@
+---
+title: digital-agent
+app_file: app.py
+sdk: gradio
+sdk_version: 6.14.0
+---
 # Digital Agent
 
 A modular Gradio digital twin with a ChatGPT-inspired interface: clean message bubbles,
 responsive layout, dark/light theme support, suggested questions, copy buttons, and a
-New chat control that clears conversation state. It identifies itself as an AI.
+New chat control that clears conversation state. Request failures appear in an inline alert
+with a dedicated dismiss button; dismissing it preserves the chat, and successful replies
+automatically clear previous errors. It identifies itself as an AI.
 
 ## Run locally
 
@@ -53,12 +61,19 @@ or in the application database. Provider-side handling is subject to your provid
   concurrent threads/processes on one local host. Use a local persistent disk, not OneDrive or a
   network filesystem, for production. Use a shared database service before scaling across hosts.
 - The default database is `runtime/agent.sqlite3`; override with an absolute `DATABASE_PATH`.
+  Set `DATABASE_URL` to use external Postgres instead; configured Postgres failures never silently
+  fall back to local storage. This is recommended for hosts with ephemeral filesystems.
   Existing `unknown_questions.json` files are left intact and are not imported automatically.
 - Raw chat/provider errors and submitted contact details are not intentionally logged. Analytics,
   flagging, chat downloads, and file uploads are disabled. File paths containing profile data,
   environment files, and runtime data are blocked from Gradio file serving.
 
 ## Deployment
+
+For free Render hosting, external Postgres, and GitHub Actions auto-deployment from `main`,
+follow [DEPLOYMENT.md](DEPLOYMENT.md). The checked-in `render.yaml` and
+`.github/workflows/ci-cd.yml` belong at the root of this standalone app repository.
+
 
 ```powershell
 cd digital-agent

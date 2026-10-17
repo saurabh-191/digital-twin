@@ -2,7 +2,7 @@
 import logging
 from .config import Settings, create_client
 from .profile import build_system_prompt
-from .storage import Store
+from .storage import create_store
 from .tools import ToolHandler, tools
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ class DigitalAgent:
         self.settings = settings or Settings.from_env()
         self.client = create_client(self.settings)
         self.system_prompt = build_system_prompt()
-        self.tool_handler = ToolHandler(Store(self.settings.database))
+        self.tool_handler = ToolHandler(create_store(self.settings.database))
 
     def normalize_history(self, history):
         normalized = []
